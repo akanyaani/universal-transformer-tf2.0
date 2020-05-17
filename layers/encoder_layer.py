@@ -1,8 +1,12 @@
+from layers.attention_layer import *
 from layers.feed_forward import *
+from layers.layer_norm import *
 
 
 class EncoderLayer(tf.keras.layers):
-	def __init__(self):
+	def __init__(self,
+				 d_model, num_heads, dff,
+				 dr_rate=0.1):
 		super(EncoderLayer, self).__init__()
 		self.d_model = d_model
 		self.num_heads = num_heads
@@ -14,7 +18,7 @@ class EncoderLayer(tf.keras.layers):
 		self.layer_norm1 = LayerNormalization(self.d_model)
 		self.layer_norm2 = LayerNormalization(self.d_model)
 
-	def call(self):
+	def call(self, x, training, mask, past=None):
 		out, present = self.mha(self.layer_norm1(x), mask=mask, past_layer=past,
 								training=training)  # (batch_size, input_seq_len, d_model)
 		with tf.name_scope("residual_conn"):
