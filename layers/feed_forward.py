@@ -14,6 +14,8 @@ class Conv1d(tf.keras.layers.Layer):
 		self.bias_init = bias_init
 		self.hidden_size = hidden_size
 		self.filter_size = filter_size
+		self.weight = None
+		self.bias = None
 
 	def build(self, input_shape):
 		self.weight = self.add_weight(
@@ -37,12 +39,40 @@ class Conv1d(tf.keras.layers.Layer):
 		return outputs
 
 
+class FeedForward(tf.keras.layers.Layer):
+
+	def __init__(self, hidden_size, filter_size, dropout_rate=0.1, activation=tf.nn.relu):
+		super(FeedForward, self).__init__()
+		self.hidden_size = hidden_size
+		self.filter_size = filter_size
+		self.activation = activation
+		self.dropout_rate = dropout_rate
+
+		self.dense_layer = Conv1d(self.hidden_size, self.filter_size)
+		self.output_dense_layer = Conv1d(self.filter_size, self.hidden_size)
+
+	def call(self, x, training=False):
+		output = self.dense_layer(x)
+		output = self.activation(output)
+		output = self.output_dense_layer(output)
+
+		if training:
+			output = tf.nn.dropout(output,
+								   rate=self.dropout_rate,
+								   name="feed_forward_dropout")
+
+		return output
+
+
 class SeprableCovolution(tf.keras.layers.Layer):
 	def __init__(self):
 		super(SeprableCovolution, self).__init__()
 
+		self.sep_cov = tf.keras.layers.SeparableConv1D()
+
 	def call(self, x):
-		return
+		x = self.sep_cov(x)
+		return x
 
 
 class TransitionLayer(tf.keras.layers.Layer):
@@ -58,20 +88,14 @@ class TransitionLayer(tf.keras.layers.Layer):
 		self.filter_size = filter_size
 		self.activation = activation
 		self.dropout_rate = dropout_rate
-		if self.layer_type == "conv":
-			self.dense_layer = SeprableCovolution()
-		else:
-			self.dense_layer = Conv1d(self.hidden_size, self.filter_size)
-		self.output_dense_layer = Conv1d(self.
 
-										 , self.hidden_size)
+		if self.layer_type == "conv":
+			self.transition_layer = SeprableCovolution()
+		else:
+			self.transition_layer = FeedForward(self.hidden_size,
+												self.filter_size,
+												self.dr_rate)
 
 	def call(self, x, training=False):
-		output = self.dense_layer(x)
-		output = self.activation(output)
-		output = self.output_dense_layer(output)
-
-		if training:
-			output = tf.nn.dropout(output, rate=self.dropout_rate, name="feed_forward_dropout")
-
+		output = self.transition_layer(x)
 		return output
