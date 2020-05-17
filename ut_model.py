@@ -5,7 +5,6 @@ from tensorflow.python.framework import tensor_shape
 from layers.decoder_layer import *
 from layers.embedding_layer import *
 from layers.encoder_layer import *
-from layers.layer_norm import LayerNormalization
 from utils.tf_utils import *
 
 _ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -32,8 +31,6 @@ class UTModel(tf.keras.Model):
 		self.d_model = d_model
 		self.learning_rate = learning_rate
 		self.optimizer_t = optimizer
-		self.dataset = None
-		self.mirrored_strategy = None
 
 		self.embedding = EmbeddingLayer(
 			self.vocab_size, self.d_model)
@@ -41,21 +38,9 @@ class UTModel(tf.keras.Model):
 		self.pos_embedding = PositionEmbeddingLayer(
 			self.max_seq_len, self.d_model)
 
-		self.decoder_layers = [DecoderLayer(self.d_model, self.num_heads, self.dff)
-							   for _ in range(self.num_layers)]
-		self.layer_norm = LayerNormalization(self.d_model)
-
-		if not self.rev_embedding_projection:
-			self.output_layer = OutputLayer(self.vocab_size)
-
-		self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
-			from_logits=True, reduction='none')
-
-		self.accuracy_object = tf.keras.metrics.SparseCategoricalAccuracy(
-			name='accuracy')
-
-		self.train_step_signature = [
-			tf.TensorSpec(shape=(None, None), dtype=tf.int32)]
+		self.encoder_layers = EncoderLayer()
+		self.decoder_layers = DecoderLayer()
+		self.projection_layer = OutputLayer()
 
 	def call(self, x, training=True, past=None):
 		x = tf.cast(x, tf.int32)
@@ -69,23 +54,23 @@ class UTModel(tf.keras.Model):
 
 		att_mask = create_masks(x)
 		past_length = 1 if past is None else tf.shape(past)[-2]
+
 		with tf.name_scope("embeddings"):
 			embedded_x = self.embedding(x)
 			hidden_states = embedded_x + self.pos_embedding(x, start=past_length)
 
-		presents = []
-		for decoder_layer, past in zip(self.decoder_layers, pasts):
-			hidden_states, present = decoder_layer(hidden_states, training, att_mask, past=past)
-			presents.append(present)
+		out = self.encoder_layers(hidden_states)
 
-		hidden_states = self.layer_norm(hidden_states)
+		out = self.decoder_layers(out)
+
+		hidden_states = self.layer_norm(out)
 
 		if self.rev_embedding_projection:
 			logits = self.embedding(hidden_states, mode="projection")
 		else:
 			logits = self.output_layer(hidden_states)
 
-		return logits, presents
+		return logits
 
 	@staticmethod
 	def get_padded_accuracy(labels, logits):
@@ -320,6 +305,7 @@ class Decoder(tf.keras.layers.Layer):
 		super(Decoder, self).__init__()
 		self.out_vocab_size = out_vocab_size
 		self.num_layers = num_layers
+		self.act = act
 		self.d_model = d_model
 		self.num_heads = num_heads
 		self.dff = dff
