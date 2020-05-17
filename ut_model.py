@@ -2,9 +2,9 @@ import os
 
 from tensorflow.python.framework import tensor_shape
 
-from layers.attention_layer import *
+from layers.decoder_layer import *
 from layers.embedding_layer import *
-from layers.feed_forward import *
+from layers.encoder_layer import *
 from layers.layer_norm import LayerNormalization
 from utils.tf_utils import *
 
@@ -14,7 +14,7 @@ LOG_DIR = _ROOT + "/log"
 train_step_signature = [
 	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Inputs"),
 	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Targets"),
-	tf.TensorSpec(shape=(None), dtype=tf.int32, name="Step")
+	tf.TensorSpec(shape=None, dtype=tf.int32, name="Step")
 ]
 
 
@@ -273,26 +273,70 @@ class OutputLayer(tf.keras.layers.Layer):
 		return out
 
 
-class DecoderLayer(tf.keras.layers.Layer):
-	def __init__(self, d_model, num_heads, dff,
+class Encoder(tf.keras.layers.Layer):
+	def __init__(self,
+				 num_layers,
+				 d_model,
+				 num_heads,
+				 dff,
+				 act,
+				 inp_vocab_size,
 				 dr_rate=0.1):
-		super(DecoderLayer, self).__init__()
+		super(Encoder, self).__init__()
+		self.inp_vocab_size = inp_vocab_size
+		self.num_layers = num_layers
+		self.act = act
 		self.d_model = d_model
 		self.num_heads = num_heads
 		self.dff = dff
 		self.dr_rate = dr_rate
 
-		self.mha = MultiHeadAttention(self.d_model, self.num_heads)
-		self.feed_forward = TransitionLayer(self.d_model, self.dff, self.dr_rate)
-		self.layer_norm1 = LayerNormalization(self.d_model)
-		self.layer_norm2 = LayerNormalization(self.d_model)
+		self.embedding_layer = EmbeddingLayer(self.inp_vocab_size, self.d_model)
+		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
+		self.encoder_layer = EncoderLayer()
 
 	def call(self, x, training, mask, past=None):
-		out, present = self.mha(self.layer_norm1(x), mask=mask, past_layer=past,
-								training=training)  # (batch_size, input_seq_len, d_model)
-		with tf.name_scope("residual_conn"):
-			x = x + out
-		out = self.feed_forward(self.layer_norm2(x), training=training)  # (batch_size, input_seq_len, d_model)
-		with tf.name_scope("residual_conn"):
-			x = x + out
-		return x, present
+		out = self.embedding_layer(x)
+		# Applying embedding dropout
+		out = self.dropout(out, training=training)
+
+		if self.act:
+			raise Exception("Not implemented")
+		else:
+			for _ in range(self.num_layers):
+				out = self.encoder_layer(out, training, mask)
+		return out
+
+
+class Decoder(tf.keras.layers.Layer):
+	def __init__(self,
+				 num_layers,
+				 d_model,
+				 num_heads,
+				 dff,
+				 out_vocab_size,
+				 act,
+				 dr_rate=0.1):
+		super(Decoder, self).__init__()
+		self.out_vocab_size = out_vocab_size
+		self.num_layers = num_layers
+		self.d_model = d_model
+		self.num_heads = num_heads
+		self.dff = dff
+		self.dr_rate = dr_rate
+
+		self.embedding_layer = EmbeddingLayer(self.out_vocab_size, self.d_model)
+		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
+		self.decoder_layer = DecoderLayer()
+
+	def call(self, x, training, mask, past=None):
+		out = self.embedding_layer(x)
+		# Applying embedding dropout
+		out = self.dropout(out, training=training)
+
+		if self.act:
+			raise Exception("Not implemented")
+		else:
+			for _ in range(self.num_layers):
+				out = self.decoder_layer(out, training, mask)
+		return out

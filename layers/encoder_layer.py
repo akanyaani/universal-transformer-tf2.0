@@ -14,7 +14,11 @@ class EncoderLayer(tf.keras.layers):
 		self.dr_rate = dr_rate
 
 		self.mha = MultiHeadAttention(self.d_model, self.num_heads)
-		self.feed_forward = FeedForward(self.d_model, self.dff, self.dr_rate)
+		self.feed_forward = TransitionLayer(self.d_model,
+											self.dff,
+											self.dr_rate,
+											layer_type='ffn')
+
 		self.layer_norm1 = LayerNormalization(self.d_model)
 		self.layer_norm2 = LayerNormalization(self.d_model)
 
@@ -27,4 +31,3 @@ class EncoderLayer(tf.keras.layers):
 		with tf.name_scope("residual_conn"):
 			x = x + out
 		return x, present
-		return None
