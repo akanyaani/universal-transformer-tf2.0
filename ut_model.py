@@ -13,16 +13,15 @@ LOG_DIR = _ROOT + "/log"
 train_step_signature = [
 	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Inputs"),
 	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Targets"),
-	tf.TensorSpec(shape=None, dtype=tf.int32, name="Step")
 ]
 
 
 class UTModel(tf.keras.Model):
 	def __init__(self, num_layers, d_model, num_heads, dff, max_seq_len, vocab_size,
-				 optimizer="adam", learning_rate=1e-3, rev_embedding_projection=True):
+				 optimizer="adam", learning_rate=1e-3, rev_embd_proj=True):
 		super(UTModel, self).__init__()
 
-		self.rev_embedding_projection = rev_embedding_projection
+		self.rev_embd_proj = rev_embd_proj
 		self.num_layers = num_layers
 		self.num_heads = num_heads
 		self.dff = dff
