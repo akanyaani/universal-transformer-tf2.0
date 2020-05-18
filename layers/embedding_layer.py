@@ -1,5 +1,4 @@
-import math
-
+import numpy as np
 import tensorflow as tf
 
 
@@ -14,7 +13,7 @@ class EmbeddingLayer(tf.keras.layers.Layer):
 		self.initializer = initializer
 		if self.initializer is None:
 			self.initializer = tf.random_normal_initializer(mean=self.mean,
-															stddev=self.stddev)
+			                                                stddev=self.stddev)
 
 	def build(self, input_shape):
 		with tf.name_scope("embedding_weights"):
@@ -58,14 +57,70 @@ class EmbeddingLayer(tf.keras.layers.Layer):
 			return tf.reshape(logits, [batch_size, seq_len, self.vocab_size])
 
 
-def get_position_embedding(seq_len, hidden_size, min_timescale=1.0, max_timescale=1.0e4):
-	position = tf.cast(tf.range(seq_len), tf.float32)
-	num_timescales = hidden_size // 2
-	log_timescale_increment = (
-			math.log(float(max_timescale) / float(min_timescale)) /
-			(tf.cast(num_timescales, tf.float32) - 1))
-	inv_timescales = min_timescale * tf.exp(
-		tf.cast(tf.range(num_timescales), tf.float32) * -log_timescale_increment)
-	scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales, 0)
-	signal = tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)], axis=1)
-	return signal
+class PositionEmbeddingLayer(tf.keras.layers.Layer):
+
+	def __init__(self, max_seq_len,
+	             pos_embedding_size,
+	             trainable=True,
+	             stddev=0.02,
+	             mean=0.0):
+
+		super(PositionEmbeddingLayer, self).__init__()
+		self.max_seq_len = max_seq_len
+		self.hidden_size = pos_embedding_size
+		self.trainable = trainable
+		self.stddev = stddev
+		self.mean = mean
+
+		if trainable:
+			self.position_embedding = EmbeddingLayer(self.max_seq_len, self.hidden_size,
+			                                         stddev=self.stddev, mean=self.mean)
+
+	def call(self, inputs):
+
+		with tf.name_scope("pos_embedding"):
+			if self.trainable:
+				batch_size = tf.shape(inputs)[0]
+				seq_len = tf.shape(inputs)[1]
+
+				positions = tf.reshape(tf.tile(tf.range(0, seq_len), [batch_size]),
+				                       [batch_size, seq_len])
+
+				"""
+				sample seq_len = 8
+				sample batch_size = 2
+				positions = <tf.Tensor: shape=(2, 8), dtype=int32, numpy=
+				array([[0, 1, 2, 3, 4, 5, 6, 7],
+					[0, 1, 2, 3, 4, 5, 6, 7]], dtype=int32)>
+				"""
+
+				positions = tf.cast(positions, tf.int32)
+				position_mask = tf.cast(tf.not_equal(inputs, 0), tf.int32)
+				"""
+				zeros are padded token id
+				inputs = [[2, 3, 6, 0, 0], [2, 3, 0, 0, 0]]
+				position_mask = <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+				array([[1, 1, 1, 0, 0],
+				[1, 1, 0, 0, 0]], dtype=int32)>
+				"""
+				positions *= position_mask
+
+				return self.position_embedding(positions)
+			else:
+				return positional_encoding(self.position_seq, self.hidden_size)
+
+
+# https://www.tensorflow.org/tutorials/text/transformer
+def get_angles(pos, i, d_model):
+	angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
+	return pos * angle_rates
+
+
+def positional_encoding(position, d_model):
+	angle_rads = get_angles(np.arange(position)[:, np.newaxis],
+	                        np.arange(d_model)[np.newaxis, :],
+	                        d_model)
+	angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
+	angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
+	pos_encoding = tf.expand_dims(tf.cast(angle_rads, dtype=tf.float32), 0)
+	return pos_encoding
