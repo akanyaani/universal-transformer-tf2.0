@@ -1,59 +1,58 @@
-import collections
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
-PAD_ID = 0
-UNKNOWN_ID = 1
-START_ID = 3
-END_ID = 4
+# Adopted this data pipeline from https://www.tensorflow.org/tutorials/text/transformer
+def load_data():
+	examples, metadata = tfds.load('ted_hrlr_translate/pt_to_en', with_info=True,
+	                               as_supervised=True)
+	train_examples, val_examples = examples['train'], examples['validation']
 
-
-def load_vocab(vocab_path):
-    vocab = collections.OrderedDict()
-    index = 0
-    for line in open(vocab_path, 'r').read().splitlines():
-        vocab[line.split()[0]] = index
-        index += 1
-    inv_vocab = {v: k for k, v in vocab.items()}
-    return vocab, inv_vocab
+	return train_examples, val_examples
 
 
-def convert_by_vocab(vocab, items):
-    output = []
-    for item in items:
-        output.append(vocab[item])
-    return output
+def build_sub_word_tokenizer(train_examples, vocab_size=32000):
+	tokenizer_en = tfds.features.text.SubwordTextEncoder.build_from_corpus(
+		(en.numpy() for pt, en in train_examples), target_vocab_size=vocab_size)
+
+	tokenizer_pt = tfds.features.text.SubwordTextEncoder.build_from_corpus(
+		(pt.numpy() for pt, en in train_examples), target_vocab_size=vocab_size)
+
+	return tokenizer_en, tokenizer_pt
 
 
-def convert_tokens_to_ids(vocab, tokens):
-    return convert_by_vocab(vocab, tokens)
+def encode(lang1, lang2, tokenizer_pt, tokenizer_en):
+	lang1 = [tokenizer_pt.vocab_size] + tokenizer_pt.encode(
+		lang1.numpy()) + [tokenizer_pt.vocab_size + 1]
+
+	lang2 = [tokenizer_en.vocab_size] + tokenizer_en.encode(
+		lang2.numpy()) + [tokenizer_en.vocab_size + 1]
+
+	return lang1, lang2
 
 
-def convert_ids_to_tokens(inv_vocab, ids):
-    return convert_by_vocab(inv_vocab, ids)
+def tf_encode(pt, en):
+	result_pt, result_en = tf.py_function(encode, [pt, en], [tf.int64, tf.int64])
+	result_pt.set_shape([None])
+	result_en.set_shape([None])
+
+	return result_pt, result_en
 
 
-def parse_example(serialized_example):
-    data_fields = {
-        "inputs": tf.io.VarLenFeature(tf.int64),
-        "targets": tf.io.VarLenFeature(tf.int64)
-    }
-    parsed = tf.io.parse_single_example(serialized_example, data_fields)
-    inputs = tf.sparse.to_dense(parsed["inputs"])
-    targets = tf.sparse.to_dense(parsed["targets"])
-
-    inputs = tf.cast(inputs, tf.int32)
-    targets = tf.cast(targets, tf.int32)
-
-    return inputs, targets
+def filter_max_length(x, y, max_length=500):
+	return tf.logical_and(tf.size(x) <= max_length,
+	                      tf.size(y) <= max_length)
 
 
-def input_fn(tf_records, batch_size=32, padded_shapes=([-1], [-1]), epoch=10, buffer_size=10000):
-    if type(tf_records) is str:
-        tf_records = [tf_records]
-    dataset = tf.data.TFRecordDataset(tf_records, buffer_size=10000)
-    dataset = dataset.shuffle(buffer_size=buffer_size)
+def make_dataset(buffer_size=20000):
+	train_examples, val_examples = load_data()
+	train_dataset = train_examples.map(tf_encode)
+	train_dataset = train_dataset.filter(filter_max_length)
+	train_dataset = train_dataset.shuffle(buffer_size)
+    val_dataset = val_examples.map(tf_encode).filter(filter_max_length)
+    return train_dataset, val_dataset
 
-    dataset = dataset.map(parse_example)
+def input_fn(batch_size=32, padded_shapes=([-1], [-1]), epoch=10, buffer_size=10000):
+    dataset = make_dataset(buffer_size)
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes)
     dataset = dataset.repeat(epoch)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
