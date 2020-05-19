@@ -4,10 +4,10 @@ import os
 
 import click
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
 from data_pipeline import input_fn
-from ut_model import UTModel
+
+# from ut_model import UTModel
 
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 LOG_DIR = _ROOT + "/log"
@@ -45,7 +45,8 @@ def train(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 		mirrored_strategy = tf.distribute.MirroredStrategy(devices=["/gpu:0", "/gpu:1"])
 		dist_dataset = mirrored_strategy.experimental_distribute_dataset(dist_dataset)
 		with mirrored_strategy.scope():
-
+			pass
+			"""
 			model = UTModel(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 			                optimizer=optimizer, learning_rate=learning_rate)
 			model.creat_optimizer()
@@ -53,19 +54,23 @@ def train(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 			model.create_summary_writer(LOG_DIR)
 
 		model.mirrored_strategy = mirrored_strategy
-		model.fit(dist_dataset)
-	else:
-		examples, metadata = tfds.load('ted_hrlr_translate/pt_to_en', with_info=True,
-		                               as_supervised=True)
-		train_examples, val_examples = examples['train'], examples['validation']
+		model.fit(dist_dataset)"""
 
+	else:
+		train_dataset, test_dataset = input_fn(batch_size=batch_size)
+		for data in test_dataset:
+			import pdb;
+			pdb.set_trace()
+			print(data)
+
+		"""
 		model = UTModel(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 		                optimizer=optimizer, learning_rate=learning_rate)
 		model.creat_optimizer()
 		model.create_checkpoint_manager(MODEL_DIR)
 		model.create_summary_writer(LOG_DIR)
 		model.fit(dataset)
-		print("Training Done................")
+		print("Training Done................")"""
 
 
 if __name__ == "__main__":
