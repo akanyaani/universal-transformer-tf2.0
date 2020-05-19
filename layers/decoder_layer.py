@@ -3,9 +3,8 @@ from layers.feed_forward import *
 from layers.layer_norm import *
 
 
-class DecoderLayer(tf.keras.layers):
-	def __init__(self,
-	             d_model, num_heads, dff,
+class DecoderLayer(tf.keras.layers.Layer):
+	def __init__(self, d_model, num_heads, dff,
 	             dr_rate=0.1):
 		super(DecoderLayer, self).__init__()
 		self.num_heads = num_heads

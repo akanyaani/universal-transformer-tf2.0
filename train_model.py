@@ -4,10 +4,8 @@ import os
 
 import click
 import tensorflow as tf
-
+from ut_model import UTModel
 from data_pipeline import input_fn
-
-# from ut_model import UTModel
 
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 LOG_DIR = _ROOT + "/log"
@@ -58,19 +56,19 @@ def train(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 
 	else:
 		train_dataset, test_dataset = input_fn(batch_size=batch_size)
-		for data in test_dataset:
-			import pdb;
-			pdb.set_trace()
-			print(data)
 
-		"""
-		model = UTModel(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
-		                optimizer=optimizer, learning_rate=learning_rate)
+		model = UTModel(num_layers,
+		                embedding_size,
+		                num_heads,
+		                dff,
+		                max_seq_len,
+		                optimizer=optimizer,
+		                learning_rate=learning_rate)
 		model.creat_optimizer()
 		model.create_checkpoint_manager(MODEL_DIR)
 		model.create_summary_writer(LOG_DIR)
-		model.fit(dataset)
-		print("Training Done................")"""
+		model.fit([train_dataset, test_dataset])
+		print("Training Done................")
 
 
 if __name__ == "__main__":

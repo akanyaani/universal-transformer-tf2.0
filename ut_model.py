@@ -2,7 +2,7 @@ import os
 
 from tensorflow.python.framework import tensor_shape
 
-from layers.decoder_layer import *
+from layers.decoder_layer import DecoderLayer
 from layers.embedding_layer import *
 from layers.encoder_layer import *
 from utils.tf_utils import *
@@ -17,8 +17,17 @@ train_step_signature = [
 
 
 class UTModel(tf.keras.Model):
-	def __init__(self, num_layers, d_model, num_heads, dff, max_seq_len, inp_vocab_size, out_vocab_size,
-	             optimizer="adam", learning_rate=1e-3, rev_embd_proj=True, pos_n_time_train=False):
+	def __init__(self, num_layers,
+	             d_model,
+	             num_heads,
+	             dff,
+	             max_seq_len,
+	             inp_vocab_size=32000,
+	             out_vocab_size=32000,
+	             optimizer="adam",
+	             learning_rate=1e-3,
+	             rev_embd_proj=True,
+	             pos_n_time_train=False):
 		super(UTModel, self).__init__()
 
 		self.optimizer = None
@@ -134,7 +143,7 @@ class UTModel(tf.keras.Model):
 
 			return self.train_writer, self.test_writer
 
-	@tf.function(input_signature=train_step_signature)
+	# @tf.function(input_signature=train_step_signature)
 	def train_step(self, inputs, targets, step, grad_clip=True, clip_value=2.5):
 
 		with tf.GradientTape() as tape:
@@ -183,10 +192,15 @@ class UTModel(tf.keras.Model):
 				tf.summary.scalar("loss", mean_loss, step=step)
 		return mean_loss
 
-	def fit(self, train_dataset):
+	def fit(self, dataset):
 		if self.mirrored_strategy is None:
+			train_dataset, test_dataset = dataset
 			tf.summary.trace_on(graph=True, profiler=True)
 			for (step, (inputs, targets)) in enumerate(train_dataset):
+
+				print(inputs)
+				print(targets)
+
 				train_loss, train_acc = self.train_step(inputs, targets, step)
 				if step % 10 == 0:
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
@@ -206,7 +220,7 @@ class UTModel(tf.keras.Model):
 		else:
 			with self.mirrored_strategy.scope():
 				tf.summary.trace_on(graph=True, profiler=True)
-				for (step, (inputs)) in enumerate(train_dataset):
+				for (step, (inputs)) in enumerate(dataset):
 					train_loss = self.distributed_train_step(inputs, step)
 					if step == 0:
 						with self.train_writer.as_default():
