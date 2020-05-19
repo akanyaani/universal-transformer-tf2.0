@@ -266,27 +266,24 @@ class Encoder(tf.keras.layers.Layer):
 	             act,
 	             inp_vocab_size,
 	             max_seq_len,
-	             dr_rate=0.1):
+	             dr_rate=0.1,
+	             pos_n_time_train=False):
 		super(Encoder, self).__init__()
 		self.num_layers = num_layers
-		self.inp_vocab_size = inp_vocab_size
-		self.d_model = d_model
-		self.num_heads = num_heads
-		self.dff = dff
 		self.act = act
 		self.max_seq_len = max_seq_len
 		self.dr_rate = dr_rate
 
-		self.embedding_layer = EmbeddingLayer(self.inp_vocab_size, self.d_model)
+		self.embedding_layer = EmbeddingLayer(inp_vocab_size, d_model)
 		self.pos_embedding_layer = PositionEmbeddingLayer(self.max_seq_len,
-		                                                  self.d_model,
-		                                                  trainable=False)
+		                                                  d_model,
+		                                                  trainable=pos_n_time_train)
 		self.time_embedding_layer = PositionEmbeddingLayer(self.num_layers,
-		                                                   self.d_model,
-		                                                   trainable=False)
+		                                                   d_model,
+		                                                   trainable=pos_n_time_train)
 
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
-		self.encoder_layer = EncoderLayer(self.d_model, self.num_heads, self.dff,
+		self.encoder_layer = EncoderLayer(d_model, num_heads, dff,
 		                                  dr_rate=self.dr_rate)
 
 	def call(self, x, training, mask, past=None):
