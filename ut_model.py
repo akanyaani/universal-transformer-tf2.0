@@ -18,7 +18,7 @@ train_step_signature = [
 
 class UTModel(tf.keras.Model):
 	def __init__(self, num_layers, d_model, num_heads, dff, max_seq_len, vocab_size,
-				 optimizer="adam", learning_rate=1e-3, rev_embd_proj=True):
+	             optimizer="adam", learning_rate=1e-3, rev_embd_proj=True):
 		super(UTModel, self).__init__()
 
 		self.rev_embd_proj = rev_embd_proj
@@ -90,7 +90,7 @@ class UTModel(tf.keras.Model):
 		with tf.name_scope("optimizer"):
 			if optimizer == "adam":
 				self.optimizer = tf.keras.optimizers.Adam(self.learning_rate, beta_1=0.9, beta_2=0.98,
-														  epsilon=1e-9)
+				                                          epsilon=1e-9)
 			elif optimizer == "adadelta":
 				self.optimizer = tf.keras.optimizers.Adadelta(self.learning_rate)
 			elif optimizer == "rms":
@@ -149,7 +149,7 @@ class UTModel(tf.keras.Model):
 			gradients = tape.gradient(loss, self.trainable_variables)
 			if grad_clip:
 				gradients = [(tf.clip_by_value(grad, -clip_value, clip_value))
-							 for grad in gradients]
+				             for grad in gradients]
 			self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
 		accuracy = self.get_padded_accuracy(targets, predictions)
@@ -173,7 +173,7 @@ class UTModel(tf.keras.Model):
 				gradients = tape.gradient(loss, self.trainable_variables)
 				if grad_clip:
 					gradients = [(tf.clip_by_value(grad, -clip_value, clip_value))
-								 for grad in gradients]
+					             for grad in gradients]
 				self.optimizer.apply_gradients(list(zip(gradients, self.trainable_variables)))
 			return cross_entropy
 
@@ -206,7 +206,7 @@ class UTModel(tf.keras.Model):
 				if step % 1000 == 0:
 					ckpt_save_path = self.ckpt_manager.save()
 					print('Saving checkpoint for step {} at {}'.format(step,
-																	   ckpt_save_path))
+					                                                   ckpt_save_path))
 		else:
 			with self.mirrored_strategy.scope():
 				tf.summary.trace_on(graph=True, profiler=True)
@@ -224,7 +224,7 @@ class UTModel(tf.keras.Model):
 					if step % 1000 == 0:
 						ckpt_save_path = self.ckpt_manager.save()
 						print('Saving checkpoint for step {} at {}'.format(step,
-																		   ckpt_save_path))
+						                                                   ckpt_save_path))
 
 
 class OutputLayer(tf.keras.layers.Layer):
@@ -259,48 +259,65 @@ class OutputLayer(tf.keras.layers.Layer):
 
 class Encoder(tf.keras.layers.Layer):
 	def __init__(self,
-				 num_layers,
-				 d_model,
-				 num_heads,
-				 dff,
-				 act,
-				 inp_vocab_size,
-				 dr_rate=0.1):
+	             num_layers,
+	             d_model,
+	             num_heads,
+	             dff,
+	             act,
+	             inp_vocab_size,
+	             max_seq_len,
+	             dr_rate=0.1):
 		super(Encoder, self).__init__()
-		self.inp_vocab_size = inp_vocab_size
 		self.num_layers = num_layers
-		self.act = act
+		self.inp_vocab_size = inp_vocab_size
 		self.d_model = d_model
 		self.num_heads = num_heads
 		self.dff = dff
+		self.act = act
+		self.max_seq_len = max_seq_len
 		self.dr_rate = dr_rate
 
 		self.embedding_layer = EmbeddingLayer(self.inp_vocab_size, self.d_model)
+		self.pos_embedding_layer = PositionEmbeddingLayer(self.max_seq_len,
+		                                                  self.d_model,
+		                                                  trainable=False)
+		self.time_embedding_layer = PositionEmbeddingLayer(self.num_layers,
+		                                                   self.d_model,
+		                                                   trainable=False)
+
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
-		self.encoder_layer = EncoderLayer()
+		self.encoder_layer = EncoderLayer(self.d_model, self.num_heads, self.dff,
+		                                  dr_rate=self.dr_rate)
 
 	def call(self, x, training, mask, past=None):
-		out = self.embedding_layer(x)
-		# Applying embedding dropout
-		out = self.dropout(out, training=training)
+		with tf.name_scope("embeddings"):
+			out = self.embedding_layer(x)
+			out = out + self.pos_embedding_layer(x)
+			out = out + self.time_embedding_layer()[:0:]
+
+			# Applying embedding dropout
+			out = self.dropout(out, training=training)
 
 		if self.act:
 			raise Exception("Not implemented")
 		else:
-			for _ in range(self.num_layers):
+			for layer in range(self.num_layers):
+				# Adding time signal at start of every layer
+				out = out + self.time_embedding_layer()[:layer:]
 				out = self.encoder_layer(out, training, mask)
+
 		return out
 
 
 class Decoder(tf.keras.layers.Layer):
 	def __init__(self,
-				 num_layers,
-				 d_model,
-				 num_heads,
-				 dff,
-				 out_vocab_size,
-				 act,
-				 dr_rate=0.1):
+	             num_layers,
+	             d_model,
+	             num_heads,
+	             dff,
+	             out_vocab_size,
+	             act,
+	             dr_rate=0.1):
 		super(Decoder, self).__init__()
 		self.out_vocab_size = out_vocab_size
 		self.num_layers = num_layers

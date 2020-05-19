@@ -10,6 +10,7 @@ class EmbeddingLayer(tf.keras.layers.Layer):
 		self.embedding_size = embedding_size
 		self.stddev = stddev
 		self.mean = mean
+		self.embedding_weights = None
 		self.initializer = initializer
 		if self.initializer is None:
 			self.initializer = tf.random_normal_initializer(mean=self.mean,
