@@ -17,58 +17,54 @@ train_step_signature = [
 
 
 class UTModel(tf.keras.Model):
-	def __init__(self, num_layers, d_model, num_heads, dff, max_seq_len, vocab_size,
-	             optimizer="adam", learning_rate=1e-3, rev_embd_proj=True):
+	def __init__(self, num_layers, d_model, num_heads, dff, max_seq_len, inp_vocab_size, out_vocab_size,
+	             optimizer="adam", learning_rate=1e-3, rev_embd_proj=True, pos_n_time_train=False):
 		super(UTModel, self).__init__()
+
+		self.optimizer = None
+		self.ckpt_manager = None
+		self.train_writer = None
+		self.test_writer = None
 
 		self.rev_embd_proj = rev_embd_proj
 		self.num_layers = num_layers
 		self.num_heads = num_heads
 		self.dff = dff
 		self.max_seq_len = max_seq_len
-		self.vocab_size = vocab_size
+		self.inp_vocab_size = inp_vocab_size
+		self.out_vocab_size = out_vocab_size
+
 		self.d_model = d_model
 		self.learning_rate = learning_rate
 		self.optimizer_t = optimizer
 
-		self.embedding = EmbeddingLayer(
-			self.vocab_size, self.d_model)
+		self.encoder = Encoder(self.num_layers,
+		                       self.d_model,
+		                       self.num_heads,
+		                       self.dff,
+		                       self.act,
+		                       self.inp_vocab_size,
+		                       self.max_seq_len,
+		                       pos_n_time_train=pos_n_time_train)
 
-		self.pos_embedding = PositionEmbeddingLayer(
-			self.max_seq_len, self.d_model)
+		self.decoder = Decoder(self.num_layers,
+		                       self.d_model,
+		                       self.num_heads,
+		                       self.dff,
+		                       self.act,
+		                       self.out_vocab_size,
+		                       self.max_seq_len,
+		                       pos_n_time_train=pos_n_time_train)
 
-		self.encoder_layers = EncoderLayer()
-		self.decoder_layers = DecoderLayer()
-		self.projection_layer = OutputLayer()
+		self.projection_layer = OutputLayer(self.out_vocab_size,
+		                                    proj_weights=None)
 
-	def call(self, x, training=True, past=None):
-		x = tf.cast(x, tf.int32)
-		batch, sequence = tf.shape(x)[0], tf.shape(x)[1]
-		if past is None:
-			pasts = [None] * self.num_layers
-		else:
-			pasts = past
+	def call(self, x, training=True):
+		inp, tar = x
 
-		assert len(pasts) == self.num_layers
-
-		att_mask = create_masks(x)
-		past_length = 1 if past is None else tf.shape(past)[-2]
-
-		with tf.name_scope("embeddings"):
-			embedded_x = self.embedding(x)
-			hidden_states = embedded_x + self.pos_embedding(x, start=past_length)
-
-		out = self.encoder_layers(hidden_states)
-
-		out = self.decoder_layers(out)
-
-		hidden_states = self.layer_norm(out)
-
-		if self.rev_embedding_projection:
-			logits = self.embedding(hidden_states, mode="projection")
-		else:
-			logits = self.output_layer(hidden_states)
-
+		enc_out = self.encoder(inp, training=training)
+		dec_out = self.decoder(tar, enc_out, training=training)
+		logits = self.projection_layer(dec_out)
 		return logits
 
 	@staticmethod
@@ -85,7 +81,7 @@ class UTModel(tf.keras.Model):
 			accuracy = tf.reduce_sum(tf.cast(acc * weights, tf.float32)) / nonpad_seq
 			return tf.cast(accuracy, tf.float32)
 
-	def creat_optimizer(self):
+	def create_optimizer(self):
 		optimizer = self.optimizer_t.lower()
 		with tf.name_scope("optimizer"):
 			if optimizer == "adam":
@@ -312,30 +308,45 @@ class Decoder(tf.keras.layers.Layer):
 	             d_model,
 	             num_heads,
 	             dff,
-	             out_vocab_size,
 	             act,
-	             dr_rate=0.1):
+	             inp_vocab_size,
+	             max_seq_len,
+	             dr_rate=0.1,
+	             pos_n_time_train=False):
 		super(Decoder, self).__init__()
-		self.out_vocab_size = out_vocab_size
 		self.num_layers = num_layers
-		self.act = act
 		self.d_model = d_model
-		self.num_heads = num_heads
-		self.dff = dff
+		self.act = act
+		self.max_seq_len = max_seq_len
 		self.dr_rate = dr_rate
 
-		self.embedding_layer = EmbeddingLayer(self.out_vocab_size, self.d_model)
-		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
-		self.decoder_layer = DecoderLayer()
+		self.embedding_layer = EmbeddingLayer(inp_vocab_size, self.d_model)
+		self.pos_embedding_layer = PositionEmbeddingLayer(self.max_seq_len,
+		                                                  self.d_model,
+		                                                  trainable=pos_n_time_train)
+		self.time_embedding_layer = PositionEmbeddingLayer(self.num_layers,
+		                                                   self.d_model,
+		                                                   trainable=pos_n_time_train)
 
-	def call(self, x, training, mask, past=None):
-		out = self.embedding_layer(x)
-		# Applying embedding dropout
-		out = self.dropout(out, training=training)
+		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
+		self.decoder_layer = DecoderLayer(d_model, num_heads, dff,
+		                                  dr_rate=self.dr_rate)
+
+	def call(self, x, enc_output, training, mask):
+		with tf.name_scope("embeddings"):
+			out = self.embedding_layer(x)
+			out = out + self.pos_embedding_layer(x)
+			out = out + self.time_embedding_layer()[:0:]
+
+			# Applying embedding dropout
+			out = self.dropout(out, training=training)
 
 		if self.act:
 			raise Exception("Not implemented")
 		else:
-			for _ in range(self.num_layers):
-				out = self.decoder_layer(out, training, mask)
+			for layer in range(self.num_layers):
+				# Adding time signal at start of every layer
+				out = out + self.time_embedding_layer()[:layer:]
+				out = self.decoder_layer(out, enc_output, training, mask)
+
 		return out
