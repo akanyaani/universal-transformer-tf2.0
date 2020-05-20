@@ -19,9 +19,9 @@ class DecoderLayer(tf.keras.layers.Layer):
 		                                    dr_rate,
 		                                    layer_type='ffn')
 
-		self.layer_norm1 = LayerNormalization(self.d_model)
-		self.layer_norm2 = LayerNormalization(self.d_model)
-		self.layer_norm3 = LayerNormalization(self.d_model)
+		self.layer_norm1 = LayerNormalization()
+		self.layer_norm2 = LayerNormalization()
+		self.layer_norm3 = LayerNormalization()
 
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
 

@@ -79,7 +79,7 @@ class TransitionLayer(tf.keras.layers.Layer):
 
 	def __init__(self, hidden_size,
 				 filter_size,
-				 dropout_rate=0.1,
+				 dr_rate=0.1,
 				 layer_type="conv",
 				 activation=tf.nn.relu):
 		super(TransitionLayer, self).__init__()
@@ -87,7 +87,7 @@ class TransitionLayer(tf.keras.layers.Layer):
 		self.hidden_size = hidden_size
 		self.filter_size = filter_size
 		self.activation = activation
-		self.dropout_rate = dropout_rate
+		self.dr_rate = dr_rate
 
 		if self.layer_type == "conv":
 			self.transition_layer = SeprableCovolution()

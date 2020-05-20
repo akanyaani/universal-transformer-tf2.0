@@ -1,7 +1,5 @@
 import os
 
-from tensorflow.python.framework import tensor_shape
-
 from layers.decoder_layer import DecoderLayer
 from layers.embedding_layer import *
 from layers.encoder_layer import *
@@ -22,12 +20,13 @@ class UTModel(tf.keras.Model):
 	             num_heads,
 	             dff,
 	             max_seq_len,
+	             act=False,
 	             inp_vocab_size=32000,
 	             out_vocab_size=32000,
 	             optimizer="adam",
 	             learning_rate=1e-3,
 	             rev_embd_proj=True,
-	             pos_n_time_train=False):
+	             pos_n_time_train=True):
 		super(UTModel, self).__init__()
 
 		self.optimizer = None
@@ -39,6 +38,7 @@ class UTModel(tf.keras.Model):
 		self.num_layers = num_layers
 		self.num_heads = num_heads
 		self.dff = dff
+		self.act = act
 		self.max_seq_len = max_seq_len
 		self.inp_vocab_size = inp_vocab_size
 		self.out_vocab_size = out_vocab_size
@@ -68,11 +68,13 @@ class UTModel(tf.keras.Model):
 		self.projection_layer = OutputLayer(self.out_vocab_size,
 		                                    proj_weights=None)
 
-	def call(self, x, training=True):
-		inp, tar = x
+	def call(self, input, target, training=True):
 
-		enc_out = self.encoder(inp, training=training)
-		dec_out = self.decoder(tar, enc_out, training=training)
+		print(input.numpy().shape)
+		print(target.numpy().shape)
+
+		enc_out = self.encoder(input, training=training)
+		dec_out = self.decoder(target, enc_out, training=training)
 		logits = self.projection_layer(dec_out)
 		return logits
 
@@ -116,7 +118,7 @@ class UTModel(tf.keras.Model):
 			sequence_avg_loss = loss_ / tf.reduce_sum(mask, axis=1)
 			return sequence_avg_loss
 
-	def create_checkpoint_manager(self, checkpoint_path, max_to_keep=5, load_model=True):
+	def create_checkpoint_manager(self, checkpoint_path, max_to_keep=5, load_model=False):
 		with tf.name_scope('checkpoint_manager'):
 			ckpt = tf.train.Checkpoint(optimizer=self.optimizer, model=self)
 			self.ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=max_to_keep)
@@ -147,7 +149,7 @@ class UTModel(tf.keras.Model):
 	def train_step(self, inputs, targets, step, grad_clip=True, clip_value=2.5):
 
 		with tf.GradientTape() as tape:
-			predictions, _ = self(inputs, training=True)
+			predictions, _ = self(inputs, targets, training=True)
 			loss = tf.reduce_mean(self.get_loss(targets, predictions))
 
 		with tf.name_scope("gradients"):
@@ -195,23 +197,24 @@ class UTModel(tf.keras.Model):
 	def fit(self, dataset):
 		if self.mirrored_strategy is None:
 			train_dataset, test_dataset = dataset
-			tf.summary.trace_on(graph=True, profiler=True)
-			for (step, (inputs, targets)) in enumerate(train_dataset):
+			# tf.summary.trace_on(graph=True, profiler=True)
+			for (step, inputs) in enumerate(train_dataset):
 
-				print(inputs)
-				print(targets)
+				inputs = tf.constant(inputs)
+				# print(inputs.numpy().shape)
+				# print(targets.numpy().shape)
 
-				train_loss, train_acc = self.train_step(inputs, targets, step)
+				train_loss, train_acc = self.train_step(inputs, inputs, step)
 				if step % 10 == 0:
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
 						step, train_loss, train_acc))
 
-				if step == 0:
-					with self.train_writer.as_default():
-						tf.summary.trace_export(
-							name="gpt-2",
-							step=0,
-							profiler_outdir=LOG_DIR)
+				# if step == 0:
+				# 	with self.train_writer.as_default():
+				# 		tf.summary.trace_export(
+				# 			name="gpt-2",
+				# 			step=0,
+				# 			profiler_outdir=LOG_DIR)
 
 				if step % 1000 == 0:
 					ckpt_save_path = self.ckpt_manager.save()
@@ -277,7 +280,7 @@ class Encoder(tf.keras.layers.Layer):
 	             inp_vocab_size,
 	             max_seq_len,
 	             dr_rate=0.1,
-	             pos_n_time_train=False):
+	             pos_n_time_train=True):
 		super(Encoder, self).__init__()
 		self.num_layers = num_layers
 		self.act = act
@@ -296,11 +299,18 @@ class Encoder(tf.keras.layers.Layer):
 		self.encoder_layer = EncoderLayer(d_model, num_heads, dff,
 		                                  dr_rate=self.dr_rate)
 
-	def call(self, x, training, mask, past=None):
+	def call(self, x, training, mask=None):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
+
+			print("embedding shape :- ", out.numpy().shape)
 			out = out + self.pos_embedding_layer(x)
-			out = out + self.time_embedding_layer()[:0:]
+			# out = out + self.time_embedding_layer([0])
+			print("Final embedding :- ", out.numpy().shape)
+
+			time = self.time_embedding_layer(x, time_step=[0])
+			
+			print("time embedding:- ", time.numpy())
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -346,7 +356,7 @@ class Decoder(tf.keras.layers.Layer):
 		self.decoder_layer = DecoderLayer(d_model, num_heads, dff,
 		                                  dr_rate=self.dr_rate)
 
-	def call(self, x, enc_output, training, mask):
+	def call(self, x, enc_output, training, mask=None):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)

@@ -65,7 +65,6 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 	             trainable=True,
 	             stddev=0.02,
 	             mean=0.0):
-
 		super(PositionEmbeddingLayer, self).__init__()
 		self.max_seq_len = max_seq_len
 		self.hidden_size = pos_embedding_size
@@ -73,16 +72,27 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 		self.stddev = stddev
 		self.mean = mean
 
-		if trainable:
+		if self.trainable:
 			self.position_embedding = EmbeddingLayer(self.max_seq_len, self.hidden_size,
 			                                         stddev=self.stddev, mean=self.mean)
 
-	def call(self, inputs):
+	def call(self, inputs, time_step=None):
 
 		with tf.name_scope("pos_embedding"):
 			if self.trainable:
 				batch_size = tf.shape(inputs)[0]
 				seq_len = tf.shape(inputs)[1]
+
+				print("Time var", time_step)
+				if time_step:
+					print("Executing time")
+					time_pos = tf.tile(tf.constant([[time_step[0]+1]], tf.int32), [batch_size, 1])
+					print("Time pos shape", time_pos.numpy().shape)
+
+					return self.position_embedding(time_pos)
+
+				print("position embedding batch and seq_len :- ",
+				      batch_size.numpy(), seq_len.numpy())
 
 				positions = tf.reshape(tf.tile(tf.range(0, seq_len), [batch_size]),
 				                       [batch_size, seq_len])
@@ -108,7 +118,9 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 
 				return self.position_embedding(positions)
 			else:
-				return positional_encoding(self.position_seq, self.hidden_size)
+				print("Posintion encoding getting excuted.")
+
+				return positional_encoding(self.max_seq_len, self.hidden_size)
 
 
 # https://www.tensorflow.org/tutorials/text/transformer
