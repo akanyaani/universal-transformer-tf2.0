@@ -53,8 +53,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 		# (batch_size, seq_len_q, d_model)
 		return merged
 
-	def call(self, x, mask=None, training=True):
-		query, key, value = tf.split(x, axis=-1)
+	def call(self, query, key, value, mask=None, training=True):
 		query = self.split_heads(self.wq(query))
 		key = self.split_heads(self.wk(key))
 		value = self.split_heads(self.wv(value))

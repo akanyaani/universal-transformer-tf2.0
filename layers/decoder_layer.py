@@ -25,7 +25,7 @@ class DecoderLayer(tf.keras.layers.Layer):
 
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
 
-	def call(self, x, enc_output, training, mask, padding_mask):
+	def call(self, x, enc_output, training, mask, padding_mask=None):
 		out = self.mha1(x, x, x, mask=mask,
 		                training=training)
 		with tf.name_scope("residual_conn"):
@@ -41,5 +41,7 @@ class DecoderLayer(tf.keras.layers.Layer):
 		ffn_out = self.dropout(ffn_out, training=training)
 
 		with tf.name_scope("residual_conn"):
-			out3 = self.layernorm3(ffn_out + out2)
+			out3 = self.layer_norm3(ffn_out + out2)
+
+		print("Decoder output shape is :- ", out3.numpy().shape)
 		return out3

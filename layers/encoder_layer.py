@@ -25,12 +25,16 @@ class EncoderLayer(tf.keras.layers.Layer):
 		self.layer_norm2 = LayerNormalization()
 
 	def call(self, x, training, mask):
-		out, present = self.mha(self.layer_norm1(x),
-		                        mask=mask,
-		                        training=training)  # (batch_size, input_seq_len, d_model)
+		out = self.mha(x, x, x,
+		               mask=mask,
+		               training=training)  # (batch_size, input_seq_len, d_model)
 		with tf.name_scope("residual_conn"):
 			x = x + out
-		out = self.feed_forward(self.layer_norm2(x), training=training)  # (batch_size, input_seq_len, d_model)
+		x = self.layer_norm1(x)
+		out = self.feed_forward(x, training=training)  # (batch_size, input_seq_len, d_model)
 		with tf.name_scope("residual_conn"):
 			x = x + out
-		return x, present
+		out = self.layer_norm2(x)
+
+		print("Encoder output shape is :- ", out.numpy().shape)
+		return out

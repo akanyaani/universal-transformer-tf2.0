@@ -293,7 +293,8 @@ class Encoder(tf.keras.layers.Layer):
 		                                                  trainable=pos_n_time_train)
 		self.time_embedding_layer = PositionEmbeddingLayer(self.num_layers,
 		                                                   d_model,
-		                                                   trainable=pos_n_time_train)
+		                                                   trainable=pos_n_time_train,
+		                                                   time_embd=True)
 
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
 		self.encoder_layer = EncoderLayer(d_model, num_heads, dff,
@@ -305,12 +306,10 @@ class Encoder(tf.keras.layers.Layer):
 
 			print("embedding shape :- ", out.numpy().shape)
 			out = out + self.pos_embedding_layer(x)
-			# out = out + self.time_embedding_layer([0])
 			print("Final embedding :- ", out.numpy().shape)
 
-			time = self.time_embedding_layer(x, time_step=[0])
-			
-			print("time embedding:- ", time.numpy())
+			# time = self.time_embedding_layer(out, time_step=0)
+			# print("time embedding:- ", time.numpy().shape)
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -319,8 +318,10 @@ class Encoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
+				print("Time step:----- ", layer)
 				# Adding time signal at start of every layer
-				out = out + self.time_embedding_layer()[:layer:]
+				out = out + self.time_embedding_layer(out, time_step=layer)
+				print("Output shape :----- ", out.numpy().shape)
 				out = self.encoder_layer(out, training, mask)
 
 		return out
@@ -350,17 +351,19 @@ class Decoder(tf.keras.layers.Layer):
 		                                                  trainable=pos_n_time_train)
 		self.time_embedding_layer = PositionEmbeddingLayer(self.num_layers,
 		                                                   self.d_model,
-		                                                   trainable=pos_n_time_train)
+		                                                   trainable=pos_n_time_train,
+		                                                   time_embd=True)
 
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
 		self.decoder_layer = DecoderLayer(d_model, num_heads, dff,
 		                                  dr_rate=self.dr_rate)
 
 	def call(self, x, enc_output, training, mask=None):
+		print("Executing Decoder Call...............")
+
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)
-			out = out + self.time_embedding_layer()[:0:]
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -370,7 +373,10 @@ class Decoder(tf.keras.layers.Layer):
 		else:
 			for layer in range(self.num_layers):
 				# Adding time signal at start of every layer
-				out = out + self.time_embedding_layer()[:layer:]
+				print("Time step:----- ", layer)
+				# Adding time signal at start of every layer
+				out = out + self.time_embedding_layer(out, time_step=layer)
+				print("Output shape :----- ", out.numpy().shape)
 				out = self.decoder_layer(out, enc_output, training, mask)
 
 		return out

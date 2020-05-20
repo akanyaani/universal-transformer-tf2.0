@@ -63,12 +63,14 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 	def __init__(self, max_seq_len,
 	             pos_embedding_size,
 	             trainable=True,
+	             time_embd=False,
 	             stddev=0.02,
 	             mean=0.0):
 		super(PositionEmbeddingLayer, self).__init__()
 		self.max_seq_len = max_seq_len
 		self.hidden_size = pos_embedding_size
 		self.trainable = trainable
+		self.time_embd = time_embd
 		self.stddev = stddev
 		self.mean = mean
 
@@ -83,18 +85,13 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 				batch_size = tf.shape(inputs)[0]
 				seq_len = tf.shape(inputs)[1]
 
-				print("Time var", time_step)
-				if time_step:
+				if self.time_embd:
 					print("Executing time")
-					time_pos = tf.tile(tf.constant([[time_step[0]+1]], tf.int32), [batch_size, 1])
+					time_pos = tf.tile(tf.constant([[time_step + 1]], tf.int32), [batch_size, seq_len])
 					print("Time pos shape", time_pos.numpy().shape)
-
 					return self.position_embedding(time_pos)
 
-				print("position embedding batch and seq_len :- ",
-				      batch_size.numpy(), seq_len.numpy())
-
-				positions = tf.reshape(tf.tile(tf.range(0, seq_len), [batch_size]),
+				positions = tf.reshape(tf.tile(tf.range(1, seq_len + 1), [batch_size]),
 				                       [batch_size, seq_len])
 
 				"""
@@ -118,7 +115,7 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 
 				return self.position_embedding(positions)
 			else:
-				print("Posintion encoding getting excuted.")
+				print("Position encoding getting executed.")
 
 				return positional_encoding(self.max_seq_len, self.hidden_size)
 
