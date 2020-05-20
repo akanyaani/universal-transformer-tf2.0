@@ -67,6 +67,8 @@ class UTModel(tf.keras.Model):
 
 		self.projection_layer = OutputLayer(self.out_vocab_size,
 		                                    proj_weights=None)
+		self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+			from_logits=True, reduction='none')
 
 	def call(self, input, target, training=True):
 
@@ -149,8 +151,10 @@ class UTModel(tf.keras.Model):
 	def train_step(self, inputs, targets, step, grad_clip=True, clip_value=2.5):
 
 		with tf.GradientTape() as tape:
-			predictions, _ = self(inputs, targets, training=True)
+			predictions = self(inputs, targets, training=True)
 			loss = tf.reduce_mean(self.get_loss(targets, predictions))
+
+			print("Mini Batch Loss :- ", loss)
 
 		with tf.name_scope("gradients"):
 			gradients = tape.gradient(loss, self.trainable_variables)
