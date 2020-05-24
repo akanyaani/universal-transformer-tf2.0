@@ -72,8 +72,8 @@ class UTModel(tf.keras.Model):
 
 	def call(self, input, target, training=True):
 
-		print(input.numpy().shape)
-		print(target.numpy().shape)
+		print("Input Shape :- ", input.numpy().shape)
+		print("Target Shape :- ", target.numpy().shape)
 
 		enc_out = self.encoder(input, training=training)
 
@@ -370,6 +370,8 @@ class Decoder(tf.keras.layers.Layer):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)
+
+			print("\nFinal Decoder embedding :- ", out.numpy().shape)
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)

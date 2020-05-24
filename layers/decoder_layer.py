@@ -31,7 +31,7 @@ class DecoderLayer(tf.keras.layers.Layer):
 		with tf.name_scope("residual_conn"):
 			out1 = self.layer_norm1(out + x)
 
-		out2 = self.mha1(enc_output, enc_output, out1, mask=padding_mask,
+		out2 = self.mha2(enc_output, enc_output, out1, mask=padding_mask,
 		                 training=training)
 
 		with tf.name_scope("residual_conn"):
