@@ -36,5 +36,5 @@ class EncoderLayer(tf.keras.layers.Layer):
 			x = x + out
 		out = self.layer_norm2(x)
 
-		print("Encoder output shape is :- ", out.numpy().shape)
+		# print("Encoder output shape is :- ", out.numpy().shape)
 		return out

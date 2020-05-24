@@ -4,7 +4,9 @@ import tensorflow_datasets as tfds
 
 # Adopted this data pipeline from https://www.tensorflow.org/tutorials/text/transformer
 def load_data():
-	examples, metadata = tfds.load('ted_hrlr_translate/pt_to_en', with_info=True,
+	examples, metadata = tfds.load("ted_hrlr_translate/pt_to_en",
+	                               data_dir='/media/akanyaani/Disk2/tfds_dir',
+	                               with_info=True,
 	                               as_supervised=True)
 	train_examples, val_examples = examples['train'], examples['validation']
 
@@ -48,22 +50,26 @@ def make_dataset(buffer_size=20000):
 
 	train_dataset = train_examples.map(tf_encode)
 	train_dataset = train_dataset.filter(filter_max_length)
-	train_dataset = train_dataset.shuffle(buffer_size)
 	val_dataset = val_examples.map(tf_encode).filter(filter_max_length)
 
 	return train_dataset, val_dataset
 
 
-def input_fn(batch_size=32, padded_shapes=([-1], [-1]), epoch=10, buffer_size=10000):
+def input_fn(batch_size=32, padded_shapes=([8], [8]), epoch=10, buffer_size=10000):
 	train_dataset, val_dataset = make_dataset(buffer_size)
+	train_dataset = train_dataset.cache()
+
 	train_dataset = train_dataset \
-		.padded_batch(batch_size, padded_shapes=padded_shapes). \
-		repeat(epoch).prefetch(
+		.shuffle(buffer_size) \
+		.padded_batch(batch_size, padded_shapes=padded_shapes) \
+		.repeat(epoch).prefetch(
 		buffer_size=tf.data.experimental.AUTOTUNE)
 
+	val_dataset = val_dataset.cache()
 	val_dataset = val_dataset \
-		.padded_batch(batch_size, padded_shapes=padded_shapes). \
-		repeat(epoch).prefetch(
+		.shuffle(buffer_size) \
+		.padded_batch(batch_size, padded_shapes=padded_shapes) \
+		.repeat(epoch).prefetch(
 		buffer_size=tf.data.experimental.AUTOTUNE)
 
 	return train_dataset, val_dataset

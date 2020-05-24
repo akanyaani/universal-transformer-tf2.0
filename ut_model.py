@@ -9,8 +9,8 @@ _ROOT = os.path.abspath(os.path.dirname(__file__))
 LOG_DIR = _ROOT + "/log"
 
 train_step_signature = [
-	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Inputs"),
-	tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="Targets"),
+	tf.TensorSpec(shape=(None, None), dtype=tf.int64, name="Inputs"),
+	tf.TensorSpec(shape=(None, None), dtype=tf.int64, name="Targets"),
 ]
 
 
@@ -70,15 +70,15 @@ class UTModel(tf.keras.Model):
 		self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
 			from_logits=True, reduction='none')
 
-	def call(self, input, target, training=True):
+	def call(self, input, target_input, training=True):
 
-		print("Input Shape :- ", input.numpy().shape)
-		print("Target Shape :- ", target.numpy().shape)
+		# print("Input Shape :- ", input.numpy().shape)
+		# print("Target Shape :- ", target.numpy().shape)
 
 		enc_out = self.encoder(input, training=training)
 
-		print("Encoder shape :- ", enc_out.numpy().shape)
-		dec_out = self.decoder(target, enc_out, training=training)
+		# print("Encoder shape :- ", enc_out.numpy().shape)
+		dec_out = self.decoder(target_input, enc_out, training=training)
 		logits = self.projection_layer(dec_out)
 		return logits
 
@@ -149,12 +149,14 @@ class UTModel(tf.keras.Model):
 
 			return self.train_writer, self.test_writer
 
-	# @tf.function(input_signature=train_step_signature)
-	def train_step(self, inputs, targets, step, grad_clip=True, clip_value=2.5):
+	@tf.function(input_signature=train_step_signature)
+	def train_step(self, inputs, targets, grad_clip=True, clip_value=2.5):
 
+		target_input = targets[:, :-1]
+		target_output = targets[:, 1:]
 		with tf.GradientTape() as tape:
-			predictions = self(inputs, targets, training=True)
-			loss = tf.reduce_mean(self.get_loss(targets, predictions))
+			predictions = self(inputs, target_input, training=True)
+			loss = tf.reduce_mean(self.get_loss(target_output, predictions))
 
 			print("Mini Batch Loss :- ", loss)
 
@@ -166,7 +168,7 @@ class UTModel(tf.keras.Model):
 			self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
 		accuracy = self.get_padded_accuracy(targets, predictions)
-
+		step = self.optimizer.iterations
 		with tf.name_scope("summary_writer"):
 			with self.train_writer.as_default():
 				tf.summary.scalar("loss", loss, step=tf.cast(step, tf.int64))
@@ -176,10 +178,13 @@ class UTModel(tf.keras.Model):
 
 	@tf.function
 	def distributed_train_step(self, inputs, targets, step, grad_clip=True, clip_value=1.0):
-		def step_fn(inp, tar):
+		target_input = targets[:, :-1]
+		target_output = targets[:, 1:]
+
+		def step_fn(inp, tar_inp, tar_out):
 			with tf.GradientTape() as tape:
-				logits = self(inputs)
-				cross_entropy = self.get_loss(targets, logits)
+				logits = self(inp, tar_inp)
+				cross_entropy = self.get_loss(tar_out, logits)
 				loss = tf.reduce_mean(cross_entropy)
 
 			with tf.name_scope("gradients"):
@@ -191,7 +196,7 @@ class UTModel(tf.keras.Model):
 			return cross_entropy
 
 		per_example_losses = self.mirrored_strategy.experimental_run_v2(
-			step_fn, args=(inputs, targets))
+			step_fn, args=(inputs, target_input, target_output))
 		mean_loss = self.mirrored_strategy.reduce(
 			tf.distribute.ReduceOp.MEAN, per_example_losses, axis=0)
 
@@ -203,24 +208,24 @@ class UTModel(tf.keras.Model):
 	def fit(self, dataset):
 		if self.mirrored_strategy is None:
 			train_dataset, test_dataset = dataset
-			# tf.summary.trace_on(graph=True, profiler=True)
+			tf.summary.trace_on(graph=True, profiler=True)
 			for (step, (inputs, targets)) in enumerate(train_dataset):
 
 				# inputs = tf.constant(inputs)
 				# print(inputs.numpy().shape)
 				# print(targets.numpy().shape)
 
-				train_loss, train_acc = self.train_step(inputs, targets, step)
+				train_loss, train_acc = self.train_step(inputs, targets)
 				if step % 10 == 0:
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
 						step, train_loss, train_acc))
 
-				# if step == 0:
-				# 	with self.train_writer.as_default():
-				# 		tf.summary.trace_export(
-				# 			name="gpt-2",
-				# 			step=0,
-				# 			profiler_outdir=LOG_DIR)
+				if step == 0:
+					with self.train_writer.as_default():
+						tf.summary.trace_export(
+							name="UT",
+							step=0,
+							profiler_outdir=LOG_DIR)
 
 				if step % 1000 == 0:
 					ckpt_save_path = self.ckpt_manager.save()
@@ -310,9 +315,9 @@ class Encoder(tf.keras.layers.Layer):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
 
-			print("embedding shape :- ", out.numpy().shape)
+			# print("embedding shape :- ", out.numpy().shape)
 			out = out + self.pos_embedding_layer(x)
-			print("Final embedding :- ", out.numpy().shape)
+			# print("Final embedding :- ", out.numpy().shape)
 
 			# time = self.time_embedding_layer(out, time_step=0)
 			# print("time embedding:- ", time.numpy().shape)
@@ -324,11 +329,13 @@ class Encoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
-				print("Time step:----- ", layer)
-				# Adding time signal at start of every layer
-				out = out + self.time_embedding_layer(out, time_step=layer)
-				print("Output shape :----- ", out.numpy().shape)
-				out = self.encoder_layer(out, training, mask)
+				with tf.name_scope("encoder_{}".format(layer)):
+					# print("Time step:----- ", layer)
+					# Adding time signal at start of every layer
+					with tf.name_scope("time_signal_{}".format(layer)):
+						out = out + self.time_embedding_layer(out, time_step=layer)
+					# print("Output shape :----- ", out.numpy().shape)
+					out = self.encoder_layer(out, training, mask)
 
 		return out
 
@@ -371,7 +378,7 @@ class Decoder(tf.keras.layers.Layer):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)
 
-			print("\nFinal Decoder embedding :- ", out.numpy().shape)
+			# print("\nFinal Decoder embedding :- ", out.numpy().shape)
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -380,11 +387,13 @@ class Decoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
-				# Adding time signal at start of every layer
-				print("Time step:----- ", layer)
-				# Adding time signal at start of every layer
-				out = out + self.time_embedding_layer(out, time_step=layer)
-				print("Output shape :----- ", out.numpy().shape)
-				out = self.decoder_layer(out, enc_output, training, mask)
+				with tf.name_scope("encoder_{}".format(layer)):
+					# Adding time signal at start of every layer
+					# print("Time step:----- ", layer)
+					# Adding time signal at start of every layer
+					with tf.name_scope("time_signal_{}".format(layer)):
+						out = out + self.time_embedding_layer(out, time_step=layer)
+					# print("Output shape :----- ", out.numpy().shape)
+					out = self.decoder_layer(out, enc_output, training, mask)
 
 		return out

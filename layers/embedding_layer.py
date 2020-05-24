@@ -88,7 +88,7 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 				if self.time_embd:
 					print("Executing time")
 					time_pos = tf.tile(tf.constant([[time_step + 1]], tf.int32), [batch_size, seq_len])
-					print("Time pos shape", time_pos.numpy().shape)
+					# print("Time pos shape", time_pos.numpy().shape)
 					return self.position_embedding(time_pos)
 
 				positions = tf.reshape(tf.tile(tf.range(1, seq_len + 1), [batch_size]),

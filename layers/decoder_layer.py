@@ -43,5 +43,5 @@ class DecoderLayer(tf.keras.layers.Layer):
 		with tf.name_scope("residual_conn"):
 			out3 = self.layer_norm3(ffn_out + out2)
 
-		print("Decoder output shape is :- ", out3.numpy().shape)
+		# print("Decoder output shape is :- ", out3.numpy().shape)
 		return out3
