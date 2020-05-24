@@ -76,6 +76,8 @@ class UTModel(tf.keras.Model):
 		print(target.numpy().shape)
 
 		enc_out = self.encoder(input, training=training)
+
+		print("Encoder shape :- ", enc_out.numpy().shape)
 		dec_out = self.decoder(target, enc_out, training=training)
 		logits = self.projection_layer(dec_out)
 		return logits
@@ -202,13 +204,13 @@ class UTModel(tf.keras.Model):
 		if self.mirrored_strategy is None:
 			train_dataset, test_dataset = dataset
 			# tf.summary.trace_on(graph=True, profiler=True)
-			for (step, inputs) in enumerate(train_dataset):
+			for (step, (inputs, targets)) in enumerate(train_dataset):
 
-				inputs = tf.constant(inputs)
+				# inputs = tf.constant(inputs)
 				# print(inputs.numpy().shape)
 				# print(targets.numpy().shape)
 
-				train_loss, train_acc = self.train_step(inputs, inputs, step)
+				train_loss, train_acc = self.train_step(inputs, targets, step)
 				if step % 10 == 0:
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
 						step, train_loss, train_acc))

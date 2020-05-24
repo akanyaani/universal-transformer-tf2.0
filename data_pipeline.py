@@ -21,7 +21,7 @@ def build_sub_word_tokenizer(train_examples, vocab_size=32000):
 	return tokenizer_en, tokenizer_pt
 
 
-def filter_max_length(x, y, max_length=500):
+def filter_max_length(x, y, max_length=8):
 	return tf.logical_and(tf.size(x) <= max_length,
 	                      tf.size(y) <= max_length)
 
