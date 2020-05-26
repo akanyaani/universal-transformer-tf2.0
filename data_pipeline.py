@@ -55,7 +55,7 @@ def make_dataset(buffer_size=20000):
 	return train_dataset, val_dataset
 
 
-def input_fn(batch_size=32, padded_shapes=([8], [8]), epoch=10, buffer_size=10000):
+def input_fn(batch_size=32, padded_shapes=([-1], [-1]), epoch=10, buffer_size=10000):
 	train_dataset, val_dataset = make_dataset(buffer_size)
 	train_dataset = train_dataset.cache()
 
