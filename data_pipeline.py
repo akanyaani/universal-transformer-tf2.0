@@ -65,7 +65,6 @@ def input_fn(batch_size=32, padded_shapes=([8], [8]), epoch=10, buffer_size=1000
 		.repeat(epoch).prefetch(
 		buffer_size=tf.data.experimental.AUTOTUNE)
 
-	val_dataset = val_dataset.cache()
 	val_dataset = val_dataset \
 		.shuffle(buffer_size) \
 		.padded_batch(batch_size, padded_shapes=padded_shapes) \

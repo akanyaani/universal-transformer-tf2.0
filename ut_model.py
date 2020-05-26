@@ -149,14 +149,15 @@ class UTModel(tf.keras.Model):
 
 			return self.train_writer, self.test_writer
 
-	@tf.function(input_signature=train_step_signature)
+	# @tf.function(input_signature=train_step_signature)
 	def train_step(self, inputs, targets, grad_clip=True, clip_value=2.5):
 
-		target_input = targets[:, :-1]
-		target_output = targets[:, 1:]
+		# target_input = targets[:, :-1]
+		# target_output = targets[:, 1:]
+
 		with tf.GradientTape() as tape:
-			predictions = self(inputs, target_input, training=True)
-			loss = tf.reduce_mean(self.get_loss(target_output, predictions))
+			predictions = self(inputs, targets, training=True)
+			loss = tf.reduce_mean(self.get_loss(targets, predictions))
 
 			print("Mini Batch Loss :- ", loss)
 
@@ -208,24 +209,24 @@ class UTModel(tf.keras.Model):
 	def fit(self, dataset):
 		if self.mirrored_strategy is None:
 			train_dataset, test_dataset = dataset
-			tf.summary.trace_on(graph=True, profiler=True)
+			# tf.summary.trace_on(graph=True, profiler=True)
 			for (step, (inputs, targets)) in enumerate(train_dataset):
 
 				# inputs = tf.constant(inputs)
-				# print(inputs.numpy().shape)
-				# print(targets.numpy().shape)
+				print(inputs.numpy().shape)
+				print(targets.numpy().shape)
 
 				train_loss, train_acc = self.train_step(inputs, targets)
 				if step % 10 == 0:
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
 						step, train_loss, train_acc))
 
-				if step == 0:
-					with self.train_writer.as_default():
-						tf.summary.trace_export(
-							name="UT",
-							step=0,
-							profiler_outdir=LOG_DIR)
+				# if step == 0:
+				# 	with self.train_writer.as_default():
+				# 		tf.summary.trace_export(
+				# 			name="UT",
+				# 			step=0,
+				# 			profiler_outdir=LOG_DIR)
 
 				if step % 1000 == 0:
 					ckpt_save_path = self.ckpt_manager.save()
@@ -317,7 +318,7 @@ class Encoder(tf.keras.layers.Layer):
 
 			# print("embedding shape :- ", out.numpy().shape)
 			out = out + self.pos_embedding_layer(x)
-			# print("Final embedding :- ", out.numpy().shape)
+			print("Final encoder embedding :- ", out.numpy().shape)
 
 			# time = self.time_embedding_layer(out, time_step=0)
 			# print("time embedding:- ", time.numpy().shape)
@@ -329,7 +330,8 @@ class Encoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
-				with tf.name_scope("encoder_{}".format(layer)):
+				with tf.name_scope("decoder_{}".format(layer)):
+					# print("Executing Encoder Call...............")
 					# print("Time step:----- ", layer)
 					# Adding time signal at start of every layer
 					with tf.name_scope("time_signal_{}".format(layer)):
@@ -372,13 +374,11 @@ class Decoder(tf.keras.layers.Layer):
 		                                  dr_rate=self.dr_rate)
 
 	def call(self, x, enc_output, training, mask=None):
-		print("Executing Decoder Call...............")
-
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)
 
-			# print("\nFinal Decoder embedding :- ", out.numpy().shape)
+			print("\nFinal Decoder embedding :- ", out.numpy().shape)
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -388,6 +388,7 @@ class Decoder(tf.keras.layers.Layer):
 		else:
 			for layer in range(self.num_layers):
 				with tf.name_scope("encoder_{}".format(layer)):
+					print("Executing Decoder Call...............")
 					# Adding time signal at start of every layer
 					# print("Time step:----- ", layer)
 					# Adding time signal at start of every layer

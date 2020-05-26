@@ -75,7 +75,7 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 		self.mean = mean
 
 		if self.trainable:
-			self.position_embedding = EmbeddingLayer(self.max_seq_len, self.hidden_size,
+			self.position_embedding = EmbeddingLayer(self.max_seq_len + 1, self.hidden_size,
 			                                         stddev=self.stddev, mean=self.mean)
 
 	def call(self, inputs, time_step=None):
