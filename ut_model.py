@@ -1,6 +1,7 @@
 import os
 
 from layers.decoder_layer import DecoderLayer
+from layers.feed_forward import FeedForward
 from layers.embedding_layer import *
 from layers.encoder_layer import *
 from utils.tf_utils import *
@@ -149,15 +150,15 @@ class UTModel(tf.keras.Model):
 
 			return self.train_writer, self.test_writer
 
-	# @tf.function(input_signature=train_step_signature)
+	@tf.function(input_signature=train_step_signature)
 	def train_step(self, inputs, targets, grad_clip=True, clip_value=2.5):
 
-		# target_input = targets[:, :-1]
-		# target_output = targets[:, 1:]
+		target_input = targets[:, :-1]
+		target_output = targets[:, 1:]
 
 		with tf.GradientTape() as tape:
-			predictions = self(inputs, targets, training=True)
-			loss = tf.reduce_mean(self.get_loss(targets, predictions))
+			predictions = self(inputs, target_input, training=True)
+			loss = tf.reduce_mean(self.get_loss(target_output, predictions))
 
 			print("Mini Batch Loss :- ", loss)
 
@@ -168,7 +169,7 @@ class UTModel(tf.keras.Model):
 				             for grad in gradients]
 			self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-		accuracy = self.get_padded_accuracy(targets, predictions)
+		accuracy = self.get_padded_accuracy(target_output, predictions)
 		step = self.optimizer.iterations
 		with tf.name_scope("summary_writer"):
 			with self.train_writer.as_default():
@@ -209,7 +210,7 @@ class UTModel(tf.keras.Model):
 	def fit(self, dataset):
 		if self.mirrored_strategy is None:
 			train_dataset, test_dataset = dataset
-			# tf.summary.trace_on(graph=True, profiler=True)
+			tf.summary.trace_on(graph=True, profiler=True)
 			for (step, (inputs, targets)) in enumerate(train_dataset):
 
 				# inputs = tf.constant(inputs)
@@ -221,12 +222,12 @@ class UTModel(tf.keras.Model):
 					print('Step {} Train_Loss {:.4f} Train_Accuracy {:.4f}'.format(
 						step, train_loss, train_acc))
 
-				# if step == 0:
-				# 	with self.train_writer.as_default():
-				# 		tf.summary.trace_export(
-				# 			name="UT",
-				# 			step=0,
-				# 			profiler_outdir=LOG_DIR)
+				if step == 0:
+					with self.train_writer.as_default():
+						tf.summary.trace_export(
+							name="UT",
+							step=0,
+							profiler_outdir=LOG_DIR)
 
 				if step % 1000 == 0:
 					ckpt_save_path = self.ckpt_manager.save()
@@ -318,7 +319,6 @@ class Encoder(tf.keras.layers.Layer):
 
 			# print("embedding shape :- ", out.numpy().shape)
 			out = out + self.pos_embedding_layer(x)
-			print("Final encoder embedding :- ", out.numpy().shape)
 
 			# time = self.time_embedding_layer(out, time_step=0)
 			# print("time embedding:- ", time.numpy().shape)
@@ -330,7 +330,7 @@ class Encoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
-				with tf.name_scope("decoder_{}".format(layer)):
+				with tf.name_scope("encoder_{}".format(layer)):
 					# print("Executing Encoder Call...............")
 					# print("Time step:----- ", layer)
 					# Adding time signal at start of every layer
@@ -378,8 +378,6 @@ class Decoder(tf.keras.layers.Layer):
 			out = self.embedding_layer(x)
 			out = out + self.pos_embedding_layer(x)
 
-			print("\nFinal Decoder embedding :- ", out.numpy().shape)
-
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
 
@@ -387,7 +385,7 @@ class Decoder(tf.keras.layers.Layer):
 			raise Exception("Not implemented")
 		else:
 			for layer in range(self.num_layers):
-				with tf.name_scope("encoder_{}".format(layer)):
+				with tf.name_scope("decoder_{}".format(layer)):
 					print("Executing Decoder Call...............")
 					# Adding time signal at start of every layer
 					# print("Time step:----- ", layer)
@@ -398,3 +396,16 @@ class Decoder(tf.keras.layers.Layer):
 					out = self.decoder_layer(out, enc_output, training, mask)
 
 		return out
+
+
+class AdaptiveComputationTime(tf.keras.layers.Layer):
+	def __init__(self):
+		super(AdaptiveComputationTime).__init__()
+		self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
+
+	def call(self, inputs, **kwargs):
+		halting_prob = tf.zeros(inputs, name="halting_probability")
+
+		halting_prob = self.pondering_layer(inputs)
+
+		return None

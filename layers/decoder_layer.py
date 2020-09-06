@@ -29,9 +29,6 @@ class DecoderLayer(tf.keras.layers.Layer):
 		out = self.mha1(x, x, x, mask=mask,
 		                training=training)
 
-		print("\nDecoder MHA1 shape", out.numpy().shape)
-		print("Decoder enc_output shape", enc_output.numpy().shape)
-
 		with tf.name_scope("residual_conn"):
 			out1 = self.layer_norm1(out + x)
 
