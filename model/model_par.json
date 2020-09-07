@@ -1,1 +1,0 @@
-{"num_layers": 8, "d_model": 768, "num_heads": 8, "dff": 3072, "max_seq_len": 515, "vocab_size": 32000}

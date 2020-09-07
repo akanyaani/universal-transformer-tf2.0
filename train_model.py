@@ -47,7 +47,7 @@ def train(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 			"""
 			model = UTModel(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 			                optimizer=optimizer, learning_rate=learning_rate)
-			model.creat_optimizer()
+			model.create_optimizer()
 			model.create_checkpoint_manager(MODEL_DIR)
 			model.create_summary_writer(LOG_DIR)
 
@@ -64,7 +64,8 @@ def train(num_layers, embedding_size, num_heads, dff, max_seq_len, vocab_size,
 		                max_seq_len,
 		                optimizer=optimizer,
 		                learning_rate=learning_rate)
-		model.creat_optimizer()
+		model.mirrored_strategy = None
+		model.create_optimizer()
 		model.create_checkpoint_manager(MODEL_DIR)
 		model.create_summary_writer(LOG_DIR)
 		model.fit([train_dataset, test_dataset])
