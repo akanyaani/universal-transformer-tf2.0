@@ -5,7 +5,7 @@ import tensorflow_datasets as tfds
 # Adopted this data pipeline from https://www.tensorflow.org/tutorials/text/transformer
 def load_data():
 	examples, metadata = tfds.load("ted_hrlr_translate/pt_to_en",
-	                               data_dir='/media/akanyaani/Disk2/tfds_dir',
+	                               data_dir='/disk/tfds_dir',
 	                               with_info=True,
 	                               as_supervised=True)
 	train_examples, val_examples = examples['train'], examples['validation']

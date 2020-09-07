@@ -399,13 +399,21 @@ class Decoder(tf.keras.layers.Layer):
 
 
 class AdaptiveComputationTime(tf.keras.layers.Layer):
-	def __init__(self):
+	def __init__(self,
+	             num_layers,
+	             threshold=0.9):
 		super(AdaptiveComputationTime).__init__()
+		self.num_layers = num_layers
 		self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
+		self.threshold = threshold
 
 	def call(self, inputs, **kwargs):
 		halting_prob = tf.zeros(inputs, name="halting_probability")
 
 		halting_prob = self.pondering_layer(inputs)
+		previous_state = tf.zeros_like(inputs)
+
+		for layer in range(self.num_layers):
+
 
 		return None
