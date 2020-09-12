@@ -89,8 +89,8 @@ $ sequence_generator.ipynb
 
 **References:**
 
-* ["tensor2tensor"](https://github.com/tensorflow/tensor2tensor)
-* ["Universal-Transformer-Pytorch"](https://github.com/andreamad8/Universal-Transformer-Pytorch)
+* [tensor2tensor](https://github.com/tensorflow/tensor2tensor)
+* [Universal-Transformer-Pytorch](https://github.com/andreamad8/Universal-Transformer-Pytorch)
 
 
 **Contribution**
