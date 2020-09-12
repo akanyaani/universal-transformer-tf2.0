@@ -102,8 +102,17 @@ class PositionEmbeddingLayer(tf.keras.layers.Layer):
 					[0, 1, 2, 3, 4, 5, 6, 7]], dtype=int32)>
 				"""
 
+				# print("Position shape :-", tf.shape(positions))
 				positions = tf.cast(positions, tf.int32)
-				position_mask = tf.cast(tf.not_equal(inputs, 0), tf.int32)
+				
+				mask_int = tf.reduce_sum(inputs, axis=-1)
+
+				# print(tf.shape(mask_int))
+				# print(mask_int)
+
+				position_mask = tf.cast(tf.not_equal(mask_int, 0), tf.int32)
+
+				# print(position_mask)
 				"""
 				zeros are padded token id
 				inputs = [[2, 3, 6, 0, 0], [2, 3, 0, 0, 0]]

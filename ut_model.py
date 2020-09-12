@@ -149,7 +149,7 @@ class UTModel(tf.keras.Model):
 
 			return self.train_writer, self.test_writer
 
-	@tf.function(input_signature=train_step_signature)
+	# @tf.function(input_signature=train_step_signature)
 	def train_step(self, inputs, targets, grad_clip=True, clip_value=2.5):
 
 		target_input = targets[:, :-1]
@@ -284,7 +284,6 @@ class OutputLayer(tf.keras.layers.Layer):
 
 class Encoder(tf.keras.layers.Layer):
 	def __init__(self,
-	             batch_size,
 	             num_layers,
 	             d_model,
 	             num_heads,
@@ -296,7 +295,7 @@ class Encoder(tf.keras.layers.Layer):
 	             pos_n_time_train=True):
 		super(Encoder, self).__init__()
 		self.num_layers = num_layers
-		self.act = act
+		self.act = True
 		self.max_seq_len = max_seq_len
 		self.dr_rate = dr_rate
 
@@ -322,7 +321,13 @@ class Encoder(tf.keras.layers.Layer):
 			out = self.dropout(out, training=training)
 
 		if self.act:
-
+			print("ACT activated,,,,,,,,,,,,")
+			out = self.act(out,
+			               halt_threshold=0.9,
+			               layer_obj=self,
+			               training=training,
+			               mask=mask,
+			               encoder_output=None)
 
 		else:
 			for layer in range(self.num_layers):
@@ -373,7 +378,7 @@ class Decoder(tf.keras.layers.Layer):
 	def call(self, x, enc_output, training, mask=None):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
-			out = out + self.pos_embedding_layer(x)
+			out = out + self.pos_embedding_layer(out)
 
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
@@ -409,6 +414,8 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 	def call(self, inputs,
 	         halt_threshold=0.9,
 	         layer_obj=None,
+	         training=None,
+	         mask=None,
 	         encoder_output=None):
 
 		halting_probability = tf.zeros((tf.shape(inputs)[0], tf.shape(inputs)[1]), name='halting_probability')
@@ -416,20 +423,32 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 		n_updates = tf.zeros((tf.shape(inputs)[0], tf.shape(inputs)[1]), name="n_updates")
 
 		previous_state = tf.zeros_like(inputs, name='previous_state')
-		for i in range(layer_obj.num_layers):
 
-			if not should_continue(halt_threshold,
-			                       halting_probability):
-				break
+		print("Shape of input :-", tf.shape(inputs))
+		for time in range(layer_obj.num_layers):
+
+			print("Halting prob :-", halting_probability)
+			# if not should_continue(halt_threshold,
+			#                        halting_probability):
+			# 	break
 
 			# Adding position and time embedding
-			state = state + layer_obj.pos_embedding_layer(inputs)
-			state = state + layer_obj.time_embedding_layer(state, time_step=i)
+
+			# non_zero = tf.nonzero(inputs)
+			#
+			# print(non_zero)
+			state = inputs + layer_obj.pos_embedding_layer(inputs)
+			state = state + layer_obj.time_embedding_layer(state, time_step=time)
 
 			pondering = tf.squeeze(self.pondering_layer(state), axis=-1)
 
-			still_running = tf.less(halting_probability, 1.0)
+			# print("pondering.................................")
+			# print(pondering)
 
+			still_running = tf.cast(tf.less(halting_probability, 1.0), tf.float32)
+
+			# print("Still running.................................")
+			# print(still_running)
 			# mask for new halted at this step
 			new_halted = tf.greater(halting_probability + pondering * still_running, halt_threshold)
 			new_halted = tf.cast(new_halted, tf.float32) * still_running
@@ -456,7 +475,7 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 				state, _ = layer_obj((state, encoder_output))
 			else:
 				# apply transformation on the state
-				state = layer_obj(state)
+				state = layer_obj.encoder_layer(state, training, mask)
 
 			previous_state = (state * update_weights) + (previous_state * (1 - update_weights))
 
