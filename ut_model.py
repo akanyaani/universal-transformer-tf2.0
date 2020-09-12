@@ -409,7 +409,9 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 
 	def __init__(self):
 		super(AdaptiveComputationTime, self).__init__()
-		self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
+		self.pondering_layer = tf.keras.layers.Dense(1,
+		                                             activation=tf.nn.sigmoid,
+		                                             bias_initializer='ones')
 
 	def call(self, inputs,
 	         halt_threshold=0.9,
@@ -428,15 +430,12 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 		for time in range(layer_obj.num_layers):
 
 			print("Halting prob :-", halting_probability)
-			# if not should_continue(halt_threshold,
-			#                        halting_probability):
-			# 	break
+			if not should_continue(halt_threshold,
+			                       halting_probability):
+				break
 
 			# Adding position and time embedding
 
-			# non_zero = tf.nonzero(inputs)
-			#
-			# print(non_zero)
 			state = inputs + layer_obj.pos_embedding_layer(inputs)
 			state = state + layer_obj.time_embedding_layer(state, time_step=time)
 
@@ -445,16 +444,16 @@ class AdaptiveComputationTime(tf.keras.layers.Layer):
 			# print("pondering.................................")
 			# print(pondering)
 
-			still_running = tf.cast(tf.less(halting_probability, 1.0), tf.float32)
+			still_running = tf.cast(tf.math.less(halting_probability, 1.0), tf.float32)
 
-			# print("Still running.................................")
-			# print(still_running)
+			print("Still running.................................")
+			print(still_running)
 			# mask for new halted at this step
-			new_halted = tf.greater(halting_probability + pondering * still_running, halt_threshold)
+			new_halted = tf.math.greater(halting_probability + pondering * still_running, halt_threshold)
 			new_halted = tf.cast(new_halted, tf.float32) * still_running
 
 			# update mask for not halted yet and not halted at this step
-			still_running_now = tf.less_equal(halting_probability + pondering * still_running, halt_threshold)
+			still_running_now = tf.math.less_equal(halting_probability + pondering * still_running, halt_threshold)
 			still_running_now = tf.cast(still_running_now, tf.float32) * still_running
 
 			# update halting probability
