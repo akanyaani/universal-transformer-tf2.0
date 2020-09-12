@@ -1,7 +1,6 @@
 import os
 
 from layers.decoder_layer import DecoderLayer
-from layers.feed_forward import FeedForward
 from layers.embedding_layer import *
 from layers.encoder_layer import *
 from utils.tf_utils import *
@@ -285,6 +284,7 @@ class OutputLayer(tf.keras.layers.Layer):
 
 class Encoder(tf.keras.layers.Layer):
 	def __init__(self,
+	             batch_size,
 	             num_layers,
 	             d_model,
 	             num_heads,
@@ -312,22 +312,18 @@ class Encoder(tf.keras.layers.Layer):
 		self.dropout = tf.keras.layers.Dropout(self.dr_rate)
 		self.encoder_layer = EncoderLayer(d_model, num_heads, dff,
 		                                  dr_rate=self.dr_rate)
+		if self.act:
+			self.act = AdaptiveComputationTime()
 
 	def call(self, x, training, mask=None):
 		with tf.name_scope("embeddings"):
 			out = self.embedding_layer(x)
-
-			# print("embedding shape :- ", out.numpy().shape)
-			out = out + self.pos_embedding_layer(x)
-
-			# time = self.time_embedding_layer(out, time_step=0)
-			# print("time embedding:- ", time.numpy().shape)
-
 			# Applying embedding dropout
 			out = self.dropout(out, training=training)
 
 		if self.act:
-			raise Exception("Not implemented")
+
+
 		else:
 			for layer in range(self.num_layers):
 				with tf.name_scope("encoder_{}".format(layer)):
@@ -335,6 +331,7 @@ class Encoder(tf.keras.layers.Layer):
 					# print("Time step:----- ", layer)
 					# Adding time signal at start of every layer
 					with tf.name_scope("time_signal_{}".format(layer)):
+						out = out + self.pos_embedding_layer(x)
 						out = out + self.time_embedding_layer(out, time_step=layer)
 					# print("Output shape :----- ", out.numpy().shape)
 					out = self.encoder_layer(out, training, mask)
@@ -398,22 +395,69 @@ class Decoder(tf.keras.layers.Layer):
 		return out
 
 
+# Used from https://github.com/cfiken/universal_transformer/blob/master/model/ut.py
+def should_continue(threshold, halting_probability) -> bool:
+	return tf.reduce_any(tf.less(halting_probability, threshold))
+
+
 class AdaptiveComputationTime(tf.keras.layers.Layer):
-	def __init__(self,
-	             num_layers,
-	             threshold=0.9):
-		super(AdaptiveComputationTime).__init__()
-		self.num_layers = num_layers
+
+	def __init__(self):
+		super(AdaptiveComputationTime, self).__init__()
 		self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
-		self.threshold = threshold
 
-	def call(self, inputs, **kwargs):
-		halting_prob = tf.zeros(inputs, name="halting_probability")
+	def call(self, inputs,
+	         halt_threshold=0.9,
+	         layer_obj=None,
+	         encoder_output=None):
 
-		halting_prob = self.pondering_layer(inputs)
-		previous_state = tf.zeros_like(inputs)
+		halting_probability = tf.zeros((tf.shape(inputs)[0], tf.shape(inputs)[1]), name='halting_probability')
+		remainders = tf.zeros((tf.shape(inputs)[0], tf.shape(inputs)[1]), name="remainder")
+		n_updates = tf.zeros((tf.shape(inputs)[0], tf.shape(inputs)[1]), name="n_updates")
 
-		for layer in range(self.num_layers):
+		previous_state = tf.zeros_like(inputs, name='previous_state')
+		for i in range(layer_obj.num_layers):
 
+			if not should_continue(halt_threshold,
+			                       halting_probability):
+				break
 
-		return None
+			# Adding position and time embedding
+			state = state + layer_obj.pos_embedding_layer(inputs)
+			state = state + layer_obj.time_embedding_layer(state, time_step=i)
+
+			pondering = tf.squeeze(self.pondering_layer(state), axis=-1)
+
+			still_running = tf.less(halting_probability, 1.0)
+
+			# mask for new halted at this step
+			new_halted = tf.greater(halting_probability + pondering * still_running, halt_threshold)
+			new_halted = tf.cast(new_halted, tf.float32) * still_running
+
+			# update mask for not halted yet and not halted at this step
+			still_running_now = tf.less_equal(halting_probability + pondering * still_running, halt_threshold)
+			still_running_now = tf.cast(still_running_now, tf.float32) * still_running
+
+			# update halting probability
+			halting_probability += pondering * still_running_now
+
+			# update remainders and halting probability for ones halted at this step
+			remainders += new_halted * (1 - halting_probability)
+			halting_probability += new_halted * remainders
+
+			# update times
+			n_updates += still_running + new_halted
+
+			# calc update weights for not halted
+			update_weights = pondering * still_running + new_halted * remainders
+			update_weights = tf.expand_dims(update_weights, -1)
+
+			if encoder_output:
+				state, _ = layer_obj((state, encoder_output))
+			else:
+				# apply transformation on the state
+				state = layer_obj(state)
+
+			previous_state = (state * update_weights) + (previous_state * (1 - update_weights))
+
+		return previous_state
