@@ -28,30 +28,10 @@ $ pip install -r requirements.txt
 You can pre-train the model using sample data available in repository or you can download the data using this github repo https://github.com/eukaryote31/openwebtext
 
 Pre-Training model on sample data available in repository
-```
-$ python pre_process.py --help
-
-Options:
-  --data-dir TEXT        training data path  [default: /data/scraped]
-  --vocab-size INTEGER   byte pair vocab size  [default: 32000]
-  --min-seq-len INTEGER  minimum sequence length  [default: 15]
-  --max-seq-len INTEGER  maximum sequence length  [default: 512]
-  --help                 Show this message and exit.
-  
-  
->> python pre_process.py
-```
-
-Pre-Training model on openwebtext or any other data
-
-```
->> python pre_process.py --data-dir=data_directory --vocab-size=32000
-```
-
 
 
 ```
-$ python train_gpt2.py --help
+$ python train_model.py --help
 
 Options:
   --num-layers INTEGER      No. of decoder layers  [default: 8]
@@ -67,25 +47,16 @@ Options:
   --help                    Show this message and exit.
   
   
->> python train_gpt2.py --num-layers=8 --embedding-size=768 --batch-size=32
+>> python train_model.py --num-layers=8 --embedding-size=768 --batch-size=32
 ```
 
-Distributed training on multiple gpu.
-```
->> python train_gpt2.py --num-layers=8 --embedding-size=768 --batch-size=32 --distributed=Ture
-```
 
 Start TensorBoard through the command line.
 ```
 $ tensorboard --logdir /log
 ```
 
-After pretraining your model, you can generate sequences by giving some context to model.
-Open this notebook and load the pretrained model and pass context to model it will return the generated sequence.
 
-```
-$ sequence_generator.ipynb
-```
 
 **References:**
 
