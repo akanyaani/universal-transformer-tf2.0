@@ -20,8 +20,8 @@ Originally implemented in tensorflow 1.14 by OapenAi :- ["openai/gpt-2"](https:/
 **Setup**
 
 ```
-$ git clone https://github.com/akanyaani/gpt-2-tensorflow2.0
-$ cd gpt-2-tensorflow2.0
+$ git clone https://github.com/akanyaani/universal-transformer-tf2.0
+$ cd universal-transformer-tf2.0
 $ pip install -r requirements.txt
 ```
 
@@ -89,10 +89,8 @@ $ sequence_generator.ipynb
 
 **References:**
 
-* ["Openai/gpt-2"](https://github.com/openai/gpt-2)
-* ["Huggingface pytorch-transformers"](https://github.com/huggingface/pytorch-transformers)
-* ["Tensorflow Transformers"](https://www.tensorflow.org/beta/tutorials/text/transformer)
-* ["The Illustrated GPT-2 "](https://jalammar.github.io/illustrated-gpt2/)
+* ["tensor2tensor"](https://github.com/tensorflow/tensor2tensor)
+* ["Universal-Transformer-Pytorch"](https://github.com/andreamad8/Universal-Transformer-Pytorch)
 
 
 **Contribution**
@@ -107,18 +105,4 @@ $ sequence_generator.ipynb
 
 **License**
 
-* [MIT](https://github.com/akanyaani/gpt-2-tensorflow2.0/blob/master/LICENSE)
-
-
-<p align="center">
-Computation Graph of GPT-2 Model.
-</p>
-
-<div align="center">
-<img src="https://raw.githubusercontent.com/akanyaani/gpt-2-tensorflow2.0/master/images/GPT-2_Decoder.jpg" alt="Decoder Graph" height="750" width="700"/>
-<div>
-<br />          
-<div align="center">
-<img src="https://raw.githubusercontent.com/akanyaani/gpt-2-tensorflow2.0/master/images/GPT-2_Graph.jpg" alt="GPT-2_Graph" height="750" width="700"/>
-<div>
-
+* [MIT](https://github.com/akanyaani/universal-transformer-tf2.0/blob/master/LICENSE)
